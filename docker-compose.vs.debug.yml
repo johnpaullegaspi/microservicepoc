@@ -1,0 +1,7 @@
+# Optional: run with `docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.vs.debug.yml up`
+# to start the .NET services in Development mode with verbose logging and console tracing (no Visual Studio needed).
+services:
+  orderservice:   { environment: { Logging__LogLevel__Default: Debug, OTEL_CONSOLE: "true" } }
+  paymentservice: { environment: { Logging__LogLevel__Default: Debug, OTEL_CONSOLE: "true" } }
+  loggingservice: { environment: { Logging__LogLevel__Default: Debug } }
+  notificationworker: { environment: { Logging__LogLevel__Default: Debug } }

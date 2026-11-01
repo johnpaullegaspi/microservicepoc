@@ -1,0 +1,64 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: SQS queues, DLQs, SNS topics and subscriptions for the Microservices POC (real AWS).
+Parameters:
+  VisibilityTimeout: { Type: Number, Default: 30 }
+  MaxReceiveCount: { Type: Number, Default: 5 }
+Resources:
+  OrderCreatedDlq: { Type: AWS::SQS::Queue, Properties: { QueueName: order-created-queue-dlq, MessageRetentionPeriod: 1209600 } }
+  PaymentResultDlq: { Type: AWS::SQS::Queue, Properties: { QueueName: payment-result-queue-dlq, MessageRetentionPeriod: 1209600 } }
+  LoggingDlq: { Type: AWS::SQS::Queue, Properties: { QueueName: logging-queue-dlq, MessageRetentionPeriod: 1209600 } }
+  NotificationDlq: { Type: AWS::SQS::Queue, Properties: { QueueName: notification-queue-dlq, MessageRetentionPeriod: 1209600 } }
+
+  OrderCreatedQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: order-created-queue
+      VisibilityTimeout: !Ref VisibilityTimeout
+      RedrivePolicy: { deadLetterTargetArn: !GetAtt OrderCreatedDlq.Arn, maxReceiveCount: !Ref MaxReceiveCount }
+  PaymentResultQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: payment-result-queue
+      VisibilityTimeout: !Ref VisibilityTimeout
+      RedrivePolicy: { deadLetterTargetArn: !GetAtt PaymentResultDlq.Arn, maxReceiveCount: !Ref MaxReceiveCount }
+  LoggingQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: logging-queue
+      VisibilityTimeout: !Ref VisibilityTimeout
+      RedrivePolicy: { deadLetterTargetArn: !GetAtt LoggingDlq.Arn, maxReceiveCount: !Ref MaxReceiveCount }
+  NotificationQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: notification-queue
+      VisibilityTimeout: !Ref VisibilityTimeout
+      RedrivePolicy: { deadLetterTargetArn: !GetAtt NotificationDlq.Arn, maxReceiveCount: !Ref MaxReceiveCount }
+
+  OrderEventsTopic: { Type: AWS::SNS::Topic, Properties: { TopicName: order-events-topic } }
+  PaymentEventsTopic: { Type: AWS::SNS::Topic, Properties: { TopicName: payment-events-topic } }
+
+  PaymentResultQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues: [ !Ref PaymentResultQueue ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: sns.amazonaws.com }
+            Action: sqs:SendMessage
+            Resource: !GetAtt PaymentResultQueue.Arn
+            Condition: { ArnEquals: { "aws:SourceArn": !Ref PaymentEventsTopic } }
+  PaymentResultSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref PaymentEventsTopic
+      Protocol: sqs
+      Endpoint: !GetAtt PaymentResultQueue.Arn
+      RawMessageDelivery: true
+
+Outputs:
+  OrderCreatedQueueUrl: { Value: !Ref OrderCreatedQueue }
+  PaymentResultQueueUrl: { Value: !Ref PaymentResultQueue }
+  LoggingQueueUrl: { Value: !Ref LoggingQueue }
+  NotificationQueueUrl: { Value: !Ref NotificationQueue }

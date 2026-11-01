@@ -1,0 +1,9 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    { "Effect": "Allow",
+      "Action": ["sqs:SendMessage", "sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:ChangeMessageVisibility", "sqs:GetQueueUrl", "sqs:GetQueueAttributes"],
+      "Resource": "arn:aws:sqs:*:*:*-queue" },
+    { "Effect": "Allow", "Action": ["sns:Publish", "sns:CreateTopic"], "Resource": "arn:aws:sns:*:*:*-events-topic" }
+  ]
+}

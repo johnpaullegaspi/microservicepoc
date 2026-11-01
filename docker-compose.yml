@@ -1,0 +1,166 @@
+name: microservices-poc
+
+x-aws-env: &aws-env
+  Aws__Region: ${AWS_REGION:-us-east-1}
+  Aws__ServiceUrl: ${AWS_SERVICE_URL:-http://localstack:4566}
+  Aws__AutoProvision: ${AWS_AUTO_PROVISION:-true}
+  Aws__AccessKey: test          # LocalStack dummy credentials (ignored when AWS_SERVICE_URL is empty)
+  Aws__SecretKey: test
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?Copy .env.example to .env}
+    volumes: [ "sqlserver-data:/var/opt/mssql" ]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q \"SELECT 1\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    restart: unless-stopped
+    networks: [ backend ]
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: paymentdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Copy .env.example to .env}
+    volumes: [ "postgres-data:/var/lib/postgresql/data" ]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d paymentdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    networks: [ backend ]
+
+  localstack:
+    # Pinned: newer LocalStack images require an auth token. 3.8.x is the last fully-open community line.
+    image: localstack/localstack:3.8.1
+    environment:
+      SERVICES: sqs,sns
+      AWS_DEFAULT_REGION: ${AWS_REGION:-us-east-1}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:4566/_localstack/health >/dev/null"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 10s
+    restart: unless-stopped
+    networks: [ backend ]
+
+  # One-shot job: provisions queues, DLQs, topics and SNS->SQS subscriptions (same script usable against real AWS).
+  localstack-init:
+    image: amazon/aws-cli:2.17.0
+    entrypoint: ["sh", "/init/init-aws.sh"]
+    environment:
+      AWS_ENDPOINT: ${AWS_SERVICE_URL:-http://localstack:4566}
+      AWS_DEFAULT_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+    volumes:
+      - ./infrastructure/localstack/init-aws.sh:/init/init-aws.sh:ro
+    depends_on:
+      localstack: { condition: service_healthy }
+    restart: "no"
+    networks: [ backend ]
+
+  loggingservice:
+    build: { context: ., dockerfile: backend/Services/LoggingService/LoggingService.API/Dockerfile }
+    environment:
+      <<: *aws-env
+      FileLogging__Directory: /var/log/microservices
+      FileLogging__MaxFileSizeBytes: "10485760"
+    volumes: [ "logs-data:/var/log/microservices" ]
+    depends_on:
+      localstack-init: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 3 bash -c '</dev/tcp/127.0.0.1/8080'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+    networks: [ backend ]
+
+  orderservice:
+    build: { context: ., dockerfile: backend/Services/OrderService/OrderService.API/Dockerfile }
+    environment:
+      <<: *aws-env
+      ConnectionStrings__OrderDb: "Server=sqlserver,1433;Database=OrderDb;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True"
+    depends_on:
+      sqlserver: { condition: service_healthy }
+      localstack-init: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 3 bash -c '</dev/tcp/127.0.0.1/8080'"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
+    restart: unless-stopped
+    networks: [ backend ]
+
+  paymentservice:
+    build: { context: ., dockerfile: backend/Services/PaymentService/PaymentService.API/Dockerfile }
+    environment:
+      <<: *aws-env
+      ConnectionStrings__PaymentDb: "Host=postgres;Port=5432;Database=paymentdb;Username=postgres;Password=${POSTGRES_PASSWORD}"
+      PaymentGateway__Mode: ${PAYMENT_GATEWAY_MODE:-Rules}
+      PaymentGateway__DelayMs: ${PAYMENT_GATEWAY_DELAY_MS:-1500}
+      Internal__ApiKey: ${INTERNAL_API_KEY:?Copy .env.example to .env}
+    depends_on:
+      postgres: { condition: service_healthy }
+      localstack-init: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 3 bash -c '</dev/tcp/127.0.0.1/8080'"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
+    restart: unless-stopped
+    networks: [ backend ]
+
+  notificationworker:
+    build: { context: ., dockerfile: backend/Workers/NotificationWorker/Dockerfile }
+    environment:
+      <<: *aws-env
+      Notifications__FilePath: /var/log/microservices/notifications.txt
+    volumes: [ "logs-data:/var/log/microservices" ]
+    depends_on:
+      localstack-init: { condition: service_completed_successfully }
+    restart: unless-stopped
+    networks: [ backend ]
+
+  gateway:
+    build: { context: ., dockerfile: backend/Gateway/Gateway.API/Dockerfile }
+    environment:
+      ReverseProxy__Clusters__orders__Destinations__d1__Address: http://orderservice:8080/
+      Cors__AllowedOrigins__0: http://localhost:3000
+      Cors__AllowedOrigins__1: http://localhost:5173
+    ports: [ "8080:8080" ]
+    depends_on:
+      orderservice: { condition: service_healthy }
+    restart: unless-stopped
+    networks: [ backend, frontend ]
+
+  frontend:
+    build: { context: ./frontend/nike-store }
+    environment:
+      GATEWAY_URL: http://gateway:8080
+    ports: [ "3000:80" ]
+    depends_on: [ gateway ]
+    restart: unless-stopped
+    networks: [ frontend ]
+
+networks:
+  backend: { internal: false }   # outbound needed only for image pulls; no host ports are published for infra
+  frontend: {}
+
+volumes:
+  sqlserver-data:
+  postgres-data:
+  logs-data:

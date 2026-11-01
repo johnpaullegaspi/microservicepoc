@@ -1,0 +1,33 @@
+# Applied automatically by `docker compose up` and by Visual Studio. Development conveniences only.
+# For a production-like run:  docker compose -f docker-compose.yml up --build
+services:
+  sqlserver:
+    ports: [ "14330:1433" ]        # connect with SSMS/Azure Data Studio: localhost,14330
+  postgres:
+    ports: [ "54320:5432" ]
+  localstack:
+    ports: [ "4566:4566" ]
+  orderservice:
+    environment: { ASPNETCORE_ENVIRONMENT: Development }
+    ports: [ "5101:8080" ]         # Swagger: http://localhost:5101/swagger
+  paymentservice:
+    environment: { ASPNETCORE_ENVIRONMENT: Development }
+    ports: [ "5102:8080" ]         # Swagger: http://localhost:5102/swagger
+  loggingservice:
+    environment: { ASPNETCORE_ENVIRONMENT: Development }
+    ports: [ "5103:8080" ]         # Swagger: http://localhost:5103/swagger
+  notificationworker:
+    environment: { DOTNET_ENVIRONMENT: Development }
+
+  # Optional Vite dev server with hot reload:  docker compose --profile dev up frontend-dev  -> http://localhost:5173
+  frontend-dev:
+    profiles: [ dev ]
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    environment:
+      VITE_PROXY_TARGET: http://gateway:8080
+    volumes: [ "./frontend/nike-store:/app" ]
+    ports: [ "5173:5173" ]
+    depends_on: [ gateway ]
+    networks: [ frontend ]

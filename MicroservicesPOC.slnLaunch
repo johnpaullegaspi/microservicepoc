@@ -1,0 +1,40 @@
+[
+  {
+    "Name": "All services (local debug - infra from Docker)",
+    "Projects": [
+      {
+        "Path": "backend\\Services\\OrderService\\OrderService.API\\OrderService.API.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "backend\\Services\\PaymentService\\PaymentService.API\\PaymentService.API.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "backend\\Services\\LoggingService\\LoggingService.API\\LoggingService.API.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "backend\\Workers\\NotificationWorker\\NotificationWorker.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "backend\\Gateway\\Gateway.API\\Gateway.API.csproj",
+        "Action": "Start"
+      }
+    ]
+  },
+  {
+    "Name": "OrderService + PaymentService only",
+    "Projects": [
+      {
+        "Path": "backend\\Services\\OrderService\\OrderService.API\\OrderService.API.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "backend\\Services\\PaymentService\\PaymentService.API\\PaymentService.API.csproj",
+        "Action": "Start"
+      }
+    ]
+  }
+]

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="Air Max style sneaker">
+  <rect width="400" height="300" fill="#f2f2f2"/>
+  <ellipse cx="200" cy="248" rx="150" ry="10" fill="#d9d9d9"/>
+  <path d="M40 215 L40 180 Q40 165 58 160 L120 142 Q140 110 170 108 L200 140 Q240 150 280 160 Q345 172 360 200 L360 222 Q360 232 348 232 L52 232 Q40 232 40 215 Z" fill="#111111"/>
+  <path d="M40 212 L360 212 L360 224 Q360 234 348 234 L52 234 Q40 234 40 224 Z" fill="#fff" stroke="#111" stroke-width="3"/>
+  <path d="M170 108 L200 140 Q240 150 280 160" fill="none" stroke="#111" stroke-width="4"/>
+  <path d="M120 142 Q140 110 170 108" fill="none" stroke="#111" stroke-width="4"/>
+  <path d="M215 148 L228 134 M236 152 L249 138 M257 157 L270 143" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+  <path d="M60 196 Q130 176 210 192" fill="none" stroke="#e11d2e" stroke-width="10" stroke-linecap="round"/>
+</svg>
